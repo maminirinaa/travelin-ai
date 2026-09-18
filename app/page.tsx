@@ -1,1154 +1,938 @@
-"use client";
+'use client';
 
-import React, { useState, useMemo } from "react";
+import React, { useState } from 'react';
 import {
-  Compass,
   Sparkles,
   MapPin,
   Calendar,
+  DollarSign,
+  Compass,
   Users,
-  Coins,
-  Heart,
-  Utensils,
-  Camera,
-  Trees,
-  Landmark,
-  Wine,
-  Loader2,
-  Check,
-  CheckCircle2,
-  Store,
-  ShieldCheck,
-  Star,
-  Clock,
-  Filter,
   Search,
-  Zap,
-  ArrowRight,
-  Share2,
-  Printer,
-  Lightbulb,
-  CreditCard,
-  X,
-  ChevronRight,
+  Star,
+  CheckCircle2,
+  ShieldCheck,
+  Heart,
   Globe,
-  Shield
-} from "lucide-react";
+  ArrowRight,
+  Clock,
+  ChevronDown,
+  ChevronRight,
+  Menu,
+  X,
+  Filter,
+  UserCheck,
+  Zap,
+  Award,
+  Luggage,
+  Coffee,
+  Car,
+  Hotel,
+  Camera
+} from 'lucide-react';
 
-// ==========================================
-// 1. TYPES & INTERFACES
-// ==========================================
-
-export type TravelStyle = "culture" | "gastronomie" | "nature" | "aventure" | "detente" | "famille";
-export type BudgetLevel = "eco" | "confort" | "luxe";
-export type ServiceCategory = "all" | "guides" | "experiences" | "transports" | "workshops" | "lodging";
-
-export interface TravelSearchParams {
-  destination: string;
-  durationDays: number;
-  startDate: string;
-  travelStyle: TravelStyle;
-  budgetLevel: BudgetLevel;
-  travelersCount: number;
-  interests: string[];
-}
-
-export interface DayActivity {
-  time: string;
-  title: string;
-  description: string;
-  location: string;
-  costEstimate: string;
-  category: "culture" | "food" | "nature" | "leisure";
-}
-
-export interface ItineraryDay {
-  dayNumber: number;
-  title: string;
-  theme: string;
-  morning: DayActivity;
-  lunch: DayActivity;
-  afternoon: DayActivity;
-  evening: DayActivity;
-  localTip: string;
-  dailyEstimatedCost: string;
-}
-
-export interface GeneratedItinerary {
-  id: string;
-  destination: string;
-  title: string;
-  overview: string;
-  durationDays: number;
-  travelStyle: TravelStyle;
-  budgetLevel: BudgetLevel;
-  travelersCount: number;
-  estimatedTotalBudget: string;
-  currency: string;
-  bestTransportTip: string;
-  days: ItineraryDay[];
-  createdAt: string;
-}
-
-export interface MarketplaceService {
+// Types
+interface ServiceItem {
   id: string;
   title: string;
-  category: "guides" | "experiences" | "transports" | "workshops" | "lodging";
-  categoryLabel: string;
-  provider: {
-    name: string;
-    role: string;
-    avatar: string;
-    verified: boolean;
-    rating: number;
-    responseTime: string;
-  };
+  category: string;
+  provider: string;
   location: string;
-  city: string;
-  duration: string;
-  price: number;
-  currency: string;
-  priceUnit: string;
   rating: number;
   reviewsCount: number;
-  badges: string[];
+  price: number;
+  unit: string;
   image: string;
-  shortDescription: string;
-  fullDescription: string;
-  highlights: string[];
-  included: string[];
-  instantBooking: boolean;
+  badge: string;
+  description: string;
 }
 
-// ==========================================
-// 2. DONNÉES LOCALES DE LA MARKETPLACE
-// ==========================================
+interface ItineraryDay {
+  day: number;
+  title: string;
+  activities: string[];
+}
 
-const MOCK_SERVICES: MarketplaceService[] = [
+interface PopularItinerary {
+  id: string;
+  destination: string;
+  country: string;
+  duration: string;
+  tags: string[];
+  image: string;
+  matchScore: number;
+  days: ItineraryDay[];
+}
+
+// Données fictives
+const CATEGORIES = [
+  { id: 'all', label: 'Tous les services', icon: Compass },
+  { id: 'guides', label: 'Guides Locaux', icon: Users },
+  { id: 'activities', label: 'Activités & Excursions', icon: Camera },
+  { id: 'transports', label: 'Transports Locaux', icon: Car },
+  { id: 'stay', label: 'Hébergements Atypiques', icon: Hotel },
+  { id: 'food', label: 'Artisans & Gastronomie', icon: Coffee },
+];
+
+const SERVICES: ServiceItem[] = [
   {
-    id: "serv-1",
-    title: "Visite Secrète & Dégustation avec un Guide Historien Local",
-    category: "guides",
-    categoryLabel: "Guide Certifié",
-    provider: {
-      name: "Youssef & Amira",
-      role: "Guide Historien & Archéologue",
-      avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-      verified: true,
-      rating: 4.98,
-      responseTime: "< 15 min",
-    },
-    location: "Médina & Quartiers Cachés, Marrakech",
-    city: "Marrakech",
-    duration: "3h30",
-    price: 45,
-    currency: "€",
-    priceUnit: "par personne",
-    rating: 4.97,
-    reviewsCount: 142,
-    badges: ["Coup de Cœur", "Certifié Local", "Max 6 pers"],
-    image: "https://images.unsplash.com/photo-1548013146-72479768bada?auto=format&fit=crop&w=800&q=80",
-    shortDescription: "Plongez dans les ruelles secrètes, rencontrez des artisans doreurs et savourez un thé sur un toit privé.",
-    fullDescription: "Une immersion authentique loin du tourisme de masse. Vous découvrirez des trésors architecturaux confidentiels, l’histoire des fondouks centenaires et terminerez par une dégustation privée de douceurs chez l'habitant.",
-    highlights: ["Accès exclusif à un riad du XVIe siècle", "Dégustation de 5 spécialités locales", "Groupe limité à 6 voyageurs"],
-    included: ["Guide privé francophone", "Thé & collations", "Plan papier annoté fait main"],
-    instantBooking: true,
-  },
-  {
-    id: "serv-2",
-    title: "Atelier Cuisine Traditionnelle & Marché du Matin avec un Chef",
-    category: "experiences",
-    categoryLabel: "Expérience Culinaire",
-    provider: {
-      name: "Kenji & Sakura",
-      role: "Chef & Maraîcher bio",
-      avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-      verified: true,
-      rating: 5.0,
-      responseTime: "< 5 min",
-    },
-    location: "Quartier Gion & Marché Nishiki, Kyoto",
-    city: "Kyoto",
-    duration: "4h00",
-    price: 85,
-    currency: "€",
-    priceUnit: "par personne",
-    rating: 4.99,
-    reviewsCount: 230,
-    badges: ["Top Évalué", "Ingrédients Bio"],
-    image: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80",
-    shortDescription: "Achetez vos ingrédients au marché historique puis préparez bento, dashi authentique et mochis artisanaux.",
-    fullDescription: "Commencez parmi les étals centenaires pour choisir le meilleur poisson et les légumes de saison. Dans une maison en bois traditionnelle (machiya), apprenez les techniques de découpe et les secrets du bouillon dashi.",
-    highlights: ["Sélection des produits avec le chef", "Repas complet 4 plats préparé ensemble", "Livret de recettes dédicacé"],
-    included: ["Ingrédients complets & tablier fourni", "Repas 4 plats avec dégustation", "Certificat d'initiation"],
-    instantBooking: true,
-  },
-  {
-    id: "serv-3",
-    title: "Chauffeur Privé Éco-Responsable & Tour Panoramique Antique",
-    category: "transports",
-    categoryLabel: "Transport & Chauffeur",
-    provider: {
-      name: "Matteo V.",
-      role: "Chauffeur guide professionnel agréé",
-      avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
-      verified: true,
-      rating: 4.94,
-      responseTime: "< 30 min",
-    },
-    location: "Rome & Voie Appienne Antique",
-    city: "Rome",
-    duration: "Journée (7h)",
-    price: 210,
-    currency: "€",
-    priceUnit: "par véhicule (1-4 pers)",
-    rating: 4.92,
-    reviewsCount: 88,
-    badges: ["100% Électrique", "Prise en charge Hôtel"],
-    image: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&w=800&q=80",
-    shortDescription: "Déplacez-vous sans stress en berline électrique haut de gamme avec arrêts photo panoramiques et conseils d'un natif.",
-    fullDescription: "Évitez les transports bondés et les zones à circulation restreinte. Matteo vient vous chercher à votre hôtel et vous emmène admirer les plus beaux panoramas de la Ville Éternelle.",
-    highlights: ["Climatisation & eau fraîche", "Arrêts flexibles à volonté", "Accès prioritaire aux zones ZTL"],
-    included: ["Véhicule électrique grand confort", "Carburant et péages inclus", "Sièges enfants disponibles"],
-    instantBooking: false,
-  },
-  {
-    id: "serv-4",
-    title: "Atelier Céramique & Poterie Ancestrale avec Maître Artisan",
-    category: "workshops",
-    categoryLabel: "Atelier Artisanal",
-    provider: {
-      name: "Sofia Mendonça",
-      role: "Maître Céramiste Azulejos",
-      avatar: "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80",
-      verified: true,
-      rating: 4.96,
-      responseTime: "< 1h",
-    },
-    location: "Quartier de l’Alfama, Lisbonne",
-    city: "Lisbonne",
-    duration: "2h30",
-    price: 55,
-    currency: "€",
-    priceUnit: "par personne",
+    id: '1',
+    title: 'Excursion Mystique & Randonnée aux Lacs Cachets',
+    category: 'activities',
+    provider: 'Elena & Matteo',
+    location: 'Dolomites, Italie',
     rating: 4.95,
-    reviewsCount: 165,
-    badges: ["Emportez votre création", "Tous Niveaux"],
-    image: "https://images.unsplash.com/photo-1565193566173-7a0ee3dbe261?auto=format&fit=crop&w=800&q=80",
-    shortDescription: "Modelez et peignez votre carreau d’azulejo traditionnel selon les techniques du XVIIIe siècle au cœur de l’Alfama.",
-    fullDescription: "Un moment suspendu dans un atelier lumineux aux murs de pierre. Sofia vous enseigne la composition des émaux naturels, le tracé des motifs classiques et l’émaillage au pinceau doux.",
-    highlights: ["Création de 2 carreaux émaillés personnalisés", "Envoi soigné à votre domicile après cuisson", "Boisson de bienvenue offerte"],
-    included: ["Argile, émaux & cuisson professionnelle", "Emballage protecteur d'expédition", "Collation locale"],
-    instantBooking: true,
+    reviewsCount: 128,
+    price: 85,
+    unit: 'personne',
+    image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&q=80&w=800',
+    badge: 'Guide Local Certifié',
+    description: 'Explorez des sentiers sauvages secrets hors des sentiers battus avec un guide naturaliste local.',
   },
   {
-    id: "serv-5",
-    title: "Nuit & Réveil en Écolodge Botanique avec Bain de Forêt",
-    category: "lodging",
-    categoryLabel: "Éco-Hébergement",
-    provider: {
-      name: "Wayan & Kadek",
-      role: "Hôtes Éco-responsables",
-      avatar: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80",
-      verified: true,
-      rating: 4.99,
-      responseTime: "< 10 min",
-    },
-    location: "Vallée Sacrée d’Ubud, Bali",
-    city: "Bali",
-    duration: "Par nuit",
-    price: 130,
-    currency: "€",
-    priceUnit: "par nuit (2 pers)",
+    id: '2',
+    title: 'Atelier Cuisine Traditionnelle chez l\'habitant',
+    category: 'food',
+    provider: 'Chef Kenji',
+    location: 'Kyoto, Japon',
     rating: 4.98,
-    reviewsCount: 312,
-    badges: ["Écolabel Platine", "Piscine Naturelle"],
-    image: "https://images.unsplash.com/photo-1540555700478-4be289fbecef?auto=format&fit=crop&w=800&q=80",
-    shortDescription: "Bambou villa sur pilotis entourée de rizières avec petit-déjeuner flottant et cours de yoga matinal.",
-    fullDescription: "Dormez bercé par la canopée tropicale. Construit en bambou durable avec ventilation naturelle et eau filtrée de source, ce lodge offre une déconnexion totale en harmonie avec la nature balinaise.",
-    highlights: ["Vue panoramique sur la jungle", "Séance de yoga matinal offerte", "Navette gratuite vers Ubud"],
-    included: ["Petit-déjeuner bio fait maison", "Accès spa & piscine naturelle", "Wifi fibre solaire"],
-    instantBooking: true,
+    reviewsCount: 210,
+    price: 95,
+    unit: 'atelier',
+    image: 'https://images.unsplash.com/photo-1553621042-f6e147245754?auto=format&fit=crop&q=80&w=800',
+    badge: 'Artisan Vérifié',
+    description: 'Apprenez l\'art authentique des RAMEN et BENTO ancestraux dans une maison traditionnelle.',
   },
   {
-    id: "serv-6",
-    title: "Balade Nocturne Photographique & Spots Secrets de la Capitale",
-    category: "experiences",
-    categoryLabel: "Photographie & Balade",
-    provider: {
-      name: "Alexandre Roche",
-      role: "Photographe d'Architecture",
-      avatar: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80",
-      verified: true,
-      rating: 4.92,
-      responseTime: "< 20 min",
-    },
-    location: "Montmartre & Quais de Seine, Paris",
-    city: "Paris",
-    duration: "3h00",
-    price: 60,
-    currency: "€",
-    priceUnit: "par personne",
-    rating: 4.91,
+    id: '3',
+    title: 'Nuit sous les Étoiles en Eco-Lodge Bulle',
+    category: 'stay',
+    provider: 'Domaine des Étoiles',
+    location: 'Provence, France',
+    rating: 4.88,
     reviewsCount: 94,
-    badges: ["Conseils Smartphone/Reflex", "15 Photos HD"],
-    image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=800&q=80",
-    shortDescription: "Capturez la Ville Lumière sous son plus beau jour lors de l'heure bleue et apprenez la composition urbaine.",
-    fullDescription: "Que vous utilisiez un smartphone ou un reflex, Alexandre vous guide vers les perspectives insolites, les passages couverts méconnus et les reflets dorés des ponts parisiens.",
-    highlights: ["Techniques de pose longue et basse lumière", "15 portraits professionnels retouchés livrés", "Ambiance conviviale petit comité"],
-    included: ["Prêt de trépieds & filtres optiques", "Galerie photo HD en ligne", "Pause café viennoiserie"],
-    instantBooking: true,
+    price: 190,
+    unit: 'nuit',
+    image: 'https://images.unsplash.com/photo-1510312305653-8ed496efae75?auto=format&fit=crop&q=80&w=800',
+    badge: 'Éco-responsable',
+    description: 'Immersions en pleine nature avec tout le confort moderne et petit-déjeuner bio local inclus.',
+  },
+  {
+    id: '4',
+    title: 'Circuit en Kombi Vintage Panoramique',
+    category: 'transports',
+    provider: 'Vintage Rides Co.',
+    location: 'Lisbonne, Portugal',
+    rating: 4.92,
+    reviewsCount: 175,
+    price: 60,
+    unit: 'jour',
+    image: 'https://images.unsplash.com/photo-1512470876302-972faa2aa9a4?auto=format&fit=crop&q=80&w=800',
+    badge: 'Chauffeur Privé',
+    description: 'Découvrez les ruelles typiques et la côte escarpée à bord d\'un Combi VW des années 70.',
+  },
+  {
+    id: '5',
+    title: 'Traversée des Souks & Secrets d\'Architecture',
+    category: 'guides',
+    provider: 'Youssef & Équipe',
+    location: 'Marrakech, Maroc',
+    rating: 4.99,
+    reviewsCount: 340,
+    price: 45,
+    unit: 'demi-journée',
+    image: 'https://images.unsplash.com/photo-1539037116277-4db20889f2d4?auto=format&fit=crop&q=80&w=800',
+    badge: 'Expert Historique',
+    description: 'Évitez les pièges à touristes et découvrez l\'histoire cachée des palais et riads secret de la Médina.',
+  },
+  {
+    id: '6',
+    title: 'Dégustation & Vendanges dans un Vignoble Familial',
+    category: 'food',
+    provider: 'Famille Rossi',
+    location: 'Toscane, Italie',
+    rating: 4.96,
+    reviewsCount: 156,
+    price: 75,
+    unit: 'personne',
+    image: 'https://images.unsplash.com/photo-1506377247377-2a5b3b417ebb?auto=format&fit=crop&q=80&w=800',
+    badge: 'Producteur Direct',
+    description: 'Visite des caves historiques, dégustation de 5 vins bio et déjeuner champêtre en plein air.',
   },
 ];
 
-// ==========================================
-// 3. MOTEUR DE GÉNÉRATION D'ITINÉRAIRE IA
-// ==========================================
-
-function generateItinerary(params: TravelSearchParams): GeneratedItinerary {
-  const dest = params.destination.trim() || "Kyoto";
-  const duration = Math.min(Math.max(params.durationDays || 3, 1), 7);
-  const costPerDay = params.budgetLevel === "eco" ? 50 : params.budgetLevel === "luxe" ? 260 : 120;
-  const totalCost = costPerDay * duration * params.travelersCount;
-
-  const days: ItineraryDay[] = [];
-  for (let i = 1; i <= duration; i++) {
-    days.push({
-      dayNumber: i,
-      title: `Jour ${i} : Immersion locale & découverte de ${dest}`,
-      theme: i === 1 ? "Premiers pas & ruelles emblématiques" : i === 2 ? "Artisans d'art & saveurs du terroir" : "Nature, belvédères & échappée belle",
-      morning: {
-        time: "09:00 - 12:00",
-        title: `Exploration matinale du cœur historique de ${dest}`,
-        description: `Flânerie paisible dans les ruelles pavées avant l'affluence, découverte de l'architecture traditionnelle et des cours secrètes.`,
-        location: `Centre historique, ${dest}`,
-        costEstimate: `${Math.round(costPerDay * 0.25)} €`,
-        category: "culture",
-      },
-      lunch: {
-        time: "12:30 - 14:00",
-        title: `Halte gourmande dans une auberge de quartier`,
-        description: `Dégustation d'un menu de saison confectionné avec les récoltes maraîchères locales et accords de vins/infusions régionales.`,
-        location: `Marché central ou bistrot d'initiés`,
-        costEstimate: `${Math.round(costPerDay * 0.25)} €`,
-        category: "food",
-      },
-      afternoon: {
-        time: "14:30 - 18:00",
-        title: `Expérience immersive réservée sur la marketplace`,
-        description: `Activité sur-mesure ou atelier pratique avec un artisan certifié de la région pour une découverte authentique.`,
-        location: `Atelier partenaire à ${dest}`,
-        costEstimate: `${Math.round(costPerDay * 0.3)} €`,
-        category: "culture",
-      },
-      evening: {
-        time: "19:30 - 22:30",
-        title: `Dîner panoramique au crépuscule & ambiance nocturne`,
-        description: `Vue dégagée sur les toits illuminés, dégustation de tapas/plats d'auteur et balade sous les lumières dorées.`,
-        location: `Belvédère ou terrasse animée`,
-        costEstimate: `${Math.round(costPerDay * 0.2)} €`,
-        category: "leisure",
-      },
-      localTip: `Pensez à réserver vos créneaux d'ateliers 48h à l'avance pour profiter de l'accès exclusif sans file d'attente.`,
-      dailyEstimatedCost: `${costPerDay * params.travelersCount} €`,
-    });
+const POPULAR_ITINERARIES: PopularItinerary[] = [
+  {
+    id: '1',
+    destination: 'Bali Authentique & Sauvage',
+    country: 'Indonésie',
+    duration: '10 jours',
+    tags: ['Culture', 'Aventure', 'Relaxation'],
+    image: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80&w=800',
+    matchScore: 98,
+    days: [
+      { day: 1, title: 'Arrivée à Ubud & Cérémonie de Bienvenue', activities: ['Transfert avec chauffeur local', 'Dîner traditionnel Balinais', 'Check-in Éco-Lodge'] },
+      { day: 2, title: 'Cascades Secrètes & Rizières d\'Jatiluwih', activities: ['Randonnée matinale au lever du soleil', 'Baignade sous la cascade Tukad Cepung', 'Déjeuner chez l\'habitant'] },
+      { day: 3, title: 'Immersion Culturelle & Artisanat de Sculpture', activities: ['Cours de poterie avec un maître local', 'Visite des temples préservés d\'Ubud'] }
+    ]
+  },
+  {
+    id: '2',
+    destination: 'Route des Fjords & Aurores Boréales',
+    country: 'Norvège',
+    duration: '7 jours',
+    tags: ['Nature', 'Aventure', 'Atypique'],
+    image: 'https://images.unsplash.com/photo-1517411032315-54ef2cb783bb?auto=format&fit=crop&q=80&w=800',
+    matchScore: 95,
+    days: [
+      { day: 1, title: 'Tromsø, la porte de l\'Arctique', activities: ['Arrivée et récupération du véhicule 4x4', 'Chasse aux aurores avec un guide astronome'] },
+      { day: 2, title: 'Fjords Sauvages de Sommarøy', activities: ['Kayak entre les îlots gelés', 'Sauna traditionnel & bain nordique'] },
+      { day: 3, title: 'Rencontre avec le Peuple Sami', activities: ['Nourrir les rennes', 'Contes traditionnels autour du feu dans une tente Lavvo'] }
+    ]
+  },
+  {
+    id: '3',
+    destination: 'Échappée Gourmande en Andalousie',
+    country: 'Espagne',
+    duration: '5 jours',
+    tags: ['Gastronomie', 'Culture', 'Soleil'],
+    image: 'https://images.unsplash.com/photo-1543783207-ec64e4d95325?auto=format&fit=crop&q=80&w=800',
+    matchScore: 92,
+    days: [
+      { day: 1, title: 'Séville & Tapas Authentiques', activities: ['Promenade dans le quartier de Santa Cruz', 'Tour de Tapas dans des tavernes centenaires'] },
+      { day: 2, title: 'Cordoue & l\'Héritage Omeyyade', activities: ['Train rapide vers Cordoue', 'Visite guidée privée de la Mezquita'] },
+      { day: 3, title: 'Grenade & Spectacle de Flamenco Sacromonte', activities: ['Exploration de l\'Alhambra', 'Soirée spectacle intime dans des caves naturelles'] }
+    ]
   }
+];
 
-  return {
-    id: `itin-${Date.now()}`,
-    destination: dest,
-    title: `Séjour ${params.travelStyle.toUpperCase()} sur-mesure à ${dest}`,
-    overview: `Un voyage de ${duration} jours optimisé par l'IA pour ${params.travelersCount} voyageur(s), alliant visites incontournables, haltes confidentielles et rencontres avec les prestataires de notre marketplace locale.`,
-    durationDays: duration,
-    travelStyle: params.travelStyle,
-    budgetLevel: params.budgetLevel,
-    travelersCount: params.travelersCount,
-    estimatedTotalBudget: `${totalCost} €`,
-    currency: "€",
-    bestTransportTip: "Privilégiez la marche et les transports doux pour profiter des cours intérieures invisibles depuis la route.",
-    days,
-    createdAt: new Date().toLocaleDateString("fr-FR"),
-  };
-}
+export default function HomePage() {
+  // Navigation State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-// ==========================================
-// 4. COMPOSANT PAGE PRINCIPAL NEXT.JS 14
-// ==========================================
+  // Form State
+  const [destination, setDestination] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [budget, setBudget] = useState('moyen');
+  const [tripType, setTripType] = useState('Aventure');
+  const [travelers, setTravelers] = useState(2);
 
-export default function TravelAppPage() {
-  // Search Form State
-  const [destination, setDestination] = useState("Kyoto");
-  const [durationDays, setDurationDays] = useState(3);
-  const [startDate, setStartDate] = useState(
-    new Date(Date.now() + 86400000 * 14).toISOString().split("T")[0]
-  );
-  const [travelStyle, setTravelStyle] = useState<TravelStyle>("culture");
-  const [budgetLevel, setBudgetLevel] = useState<BudgetLevel>("confort");
-  const [travelersCount, setTravelersCount] = useState(2);
-  const [selectedInterests, setSelectedInterests] = useState<string[]>(["artisanat", "gastronomie"]);
-  const [isLoading, setIsLoading] = useState(false);
+  // AI Generator Loading State
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedItinerary, setGeneratedItinerary] = useState<null | any>(null);
 
-  // Generated Itinerary State
-  const [itinerary, setItinerary] = useState<GeneratedItinerary>(() =>
-    generateItinerary({
-      destination: "Kyoto",
-      durationDays: 3,
-      startDate: new Date(Date.now() + 86400000 * 14).toISOString().split("T")[0],
-      travelStyle: "culture",
-      budgetLevel: "confort",
-      travelersCount: 2,
-      interests: ["artisanat", "gastronomie"],
-    })
-  );
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  // Marketplace State
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
-  // Marketplace Filters State
-  const [categoryFilter, setCategoryFilter] = useState<ServiceCategory>("all");
-  const [searchFilter, setSearchFilter] = useState("");
-  const [selectedService, setSelectedService] = useState<MarketplaceService | null>(null);
-  const [favorites, setFavorites] = useState<string[]>(["serv-1", "serv-2"]);
+  // Popular Itineraries Accordion State
+  const [expandedItinerary, setExpandedItinerary] = useState<string | null>('1');
 
-  // Booking Modal State
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
-
-  // Handlers
-  const handleGenerate = (e: React.FormEvent) => {
+  const handleGenerateItinerary = (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsGenerating(true);
+    setGeneratedItinerary(null);
+
+    // Simulation de génération IA
     setTimeout(() => {
-      const generated = generateItinerary({
-        destination,
-        durationDays,
-        startDate,
-        travelStyle,
-        budgetLevel,
-        travelersCount,
-        interests: selectedInterests,
+      setIsGenerating(false);
+      setGeneratedItinerary({
+        title: `Voyage sur mesure : ${destination || 'Destination de Rêve'}`,
+        duration: '7 Jours / 6 Nuits',
+        budgetEstimated: budget === 'eco' ? '450€ - 650€ / pers' : budget === 'moyen' ? '850€ - 1200€ / pers' : '1800€+ / pers',
+        type: tripType,
+        travelersCount: travelers,
+        highlights: [
+          '3 Activités immersives réservées auprès d\'artisans locaux',
+          'Plan d\'action quotidien personnalisé optimisé sans transports excessifs',
+          'Sélection de 2 hébergements éco-responsables à proximité',
+          'Soutien direct à l\'économie locale (+85% des dépenses reversées aux hôtes)'
+        ],
+        dayByDay: [
+          { day: 1, text: 'Arrivée & première découverte du quartier historique avec un guide local.' },
+          { day: 2, text: 'Matinée aventure en nature & Déjeuner traditionnel chez l\'habitant.' },
+          { day: 3, text: 'Journée immersion culturelle et ateliers artisanaux sur-mesure.' }
+        ]
       });
-      setItinerary(generated);
-      setSelectedDayIndex(0);
-      setIsLoading(false);
-
-      // Smooth scroll to itinerary
-      document.getElementById("itinerary-section")?.scrollIntoView({ behavior: "smooth" });
-    }, 600);
+    }, 2200);
   };
 
-  const toggleInterest = (id: string) => {
-    setSelectedInterests((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  const toggleFavorite = (id: string) => {
-    setFavorites((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-  };
-
-  // Filtered Services Memo
-  const filteredServices = useMemo(() => {
-    return MOCK_SERVICES.filter((item) => {
-      const matchCat = categoryFilter === "all" || item.category === categoryFilter;
-      const matchText =
-        item.title.toLowerCase().includes(searchFilter.toLowerCase()) ||
-        item.location.toLowerCase().includes(searchFilter.toLowerCase()) ||
-        item.provider.name.toLowerCase().includes(searchFilter.toLowerCase());
-      return matchCat && matchText;
-    });
-  }, [categoryFilter, searchFilter]);
-
-  const currentDay = itinerary.days[selectedDayIndex] || itinerary.days[0];
+  const filteredServices = selectedCategory === 'all'
+    ? SERVICES
+    : SERVICES.filter(service => service.category === selectedCategory);
 
   return (
-    <div className="min-h-screen bg-stone-100/70 text-stone-900 font-sans">
-      {/* 1. NAVIGATION HEADER */}
-      <header className="sticky top-0 z-40 w-full border-b border-stone-200 bg-stone-50/95 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 flex items-center justify-center text-white shadow-sm">
-                <Compass className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-xl font-bold tracking-tight text-stone-900">
-                  Terra<span className="text-emerald-600">Locals</span>
-                </span>
-                <p className="text-xs text-stone-500 hidden sm:block">
-                  Itinéraires IA &amp; Marketplace Locale
-                </p>
-              </div>
-            </div>
+    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans antialiased selection:bg-indigo-500 selection:text-white">
 
-            <nav className="hidden md:flex items-center gap-6 text-sm font-medium text-stone-600">
-              <a href="#search-form" className="hover:text-emerald-700 transition-colors">
-                Générateur IA
-              </a>
-              <a href="#itinerary-section" className="hover:text-emerald-700 transition-colors">
-                Itinéraire Actif
-              </a>
-              <a href="#marketplace-section" className="hover:text-emerald-700 transition-colors">
-                Marketplace des Artisans
-              </a>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-full">
-                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Next.js 14 + Tailwind</span>
-              </div>
-              <button
-                onClick={() => {
-                  document.getElementById("search-form")?.scrollIntoView({ behavior: "smooth" });
-                }}
-                className="px-4 py-2 text-xs sm:text-sm font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition-colors cursor-pointer"
-              >
-                Créer mon voyage
-              </button>
+      {}
+      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-100 shadow-sm transition-all">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+          
+          {/* Logo */}
+          <div className="flex items-center gap-2 cursor-pointer">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-200">
+              <Compass className="w-6 h-6 animate-pulse" />
             </div>
+            <span className="text-xl font-extrabold bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-600 bg-clip-text text-transparent tracking-tight">
+              AuraTravel<span className="text-indigo-600 font-black">.ai</span>
+            </span>
+          </div>
+
+          {/* Navigation Links Desktop */}
+          <nav className="hidden md:flex items-center gap-8 font-medium text-sm text-slate-600">
+            <a href="#ia-planner" className="hover:text-indigo-600 transition-colors">Planificateur IA</a>
+            <a href="#marketplace" className="hover:text-indigo-600 transition-colors">Marketplace Locale</a>
+            <a href="#itineraries" className="hover:text-indigo-600 transition-colors">Itinéraires Populaires</a>
+            <a href="#why-us" className="hover:text-indigo-600 transition-colors">Pourquoi Nous ?</a>
+          </nav>
+
+          {/* Right Actions */}
+          <div className="hidden md:flex items-center gap-4">
+            {/* Langue / Devise */}
+            <button className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-all">
+              <Globe className="w-3.5 h-3.5" />
+              <span>FR | EUR (€)</span>
+            </button>
+
+            {/* Connexion */}
+            <button className="px-5 py-2.5 text-sm font-semibold text-slate-700 hover:text-indigo-600 transition-all">
+              Se connecter
+            </button>
+
+            {/* Inscription */}
+            <button className="px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-100 hover:shadow-indigo-200 hover:-translate-y-0.5 transition-all">
+              Rejoindre
+            </button>
+          </div>
+
+          {/* Mobile Menu Button */}
+          <div className="md:hidden flex items-center gap-2">
+            <button 
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="p-2 text-slate-600 hover:text-slate-900 rounded-lg focus:outline-none"
+            >
+              {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        {isMobileMenuOpen && (
+          <div className="md:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-6 space-y-3">
+            <a href="#ia-planner" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700 font-medium">Planificateur IA</a>
+            <a href="#marketplace" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700 font-medium">Marketplace Locale</a>
+            <a href="#itineraries" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700 font-medium">Itinéraires Populaires</a>
+            <a href="#why-us" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-slate-700 font-medium">Pourquoi Nous ?</a>
+            <div className="pt-4 border-t border-slate-100 flex flex-col gap-2">
+              <button className="w-full py-2.5 text-center text-slate-700 font-semibold border border-slate-200 rounded-xl">Se connecter</button>
+              <button className="w-full py-2.5 text-center text-white bg-indigo-600 font-semibold rounded-xl">Rejoindre</button>
+            </div>
+          </div>
+        )}
       </header>
 
-      {/* MAIN CONTAINER */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12 space-y-12">
-        {/* HERO INTRO */}
-        <section className="text-center max-w-3xl mx-auto space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-stone-200 text-stone-700">
-            <Globe className="w-3.5 h-3.5 text-emerald-700" />
-            <span>Tourisme Durable &amp; Circuits Courts</span>
-          </div>
-          <h1 className="text-3xl sm:text-5xl font-extrabold tracking-tight text-stone-900 leading-tight">
-            Voyagez comme un local grâce à l'IA &amp; aux artisans
-          </h1>
-          <p className="text-sm sm:text-base text-stone-600">
-            Obtenez un itinéraire sur-mesure jour par jour et réservez instantanément des expériences immersives auprès de guides certifiés et producteurs locaux.
-          </p>
-        </section>
+      {}
+      <section id="ia-planner" className="relative pt-12 pb-24 md:pt-20 md:pb-32 overflow-hidden bg-gradient-to-b from-indigo-50/50 via-white to-slate-50">
+        
+        {/* Background Decorative Blur Blobs */}
+        <div className="absolute top-10 left-1/2 -translate-x-1/2 w-[1000px] h-[400px] bg-gradient-to-tr from-indigo-200/40 via-purple-200/30 to-pink-200/40 blur-3xl -z-10 pointer-events-none rounded-full" />
 
-        {/* 2. FORMULAIRE DE RECHERCHE D'ITINÉRAIRE IA */}
-        <section id="search-form" className="w-full bg-white rounded-2xl border border-stone-200 shadow-sm p-6 sm:p-8">
-          <form onSubmit={handleGenerate} className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-stone-100">
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800">
-                  <Sparkles className="w-5 h-5 text-emerald-700" />
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Hero Header Text */}
+          <div className="text-center max-w-3xl mx-auto mb-10 md:mb-14">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-100/80 border border-indigo-200 text-indigo-700 text-xs md:text-sm font-semibold mb-4 animate-fade-in">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>Générateur de Voyage Authentique Propulsé par l'IA</span>
+            </div>
+            
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.15]">
+              Créez votre voyage sur-mesure & soutenez les <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent">acteurs locaux</span>.
+            </h1>
+            
+            <p className="mt-4 text-base sm:text-lg text-slate-600 leading-relaxed font-normal">
+              Indiquez vos envies, l'IA compose un itinéraire unique et intègre directement les meilleurs guides, logements et activités vérifiés de la région.
+            </p>
+          </div>
+
+          {/* AI Search Card Form Container */}
+          <div className="max-w-4xl mx-auto bg-white/90 backdrop-blur-xl rounded-3xl p-6 sm:p-8 shadow-2xl shadow-slate-200/80 border border-slate-100 transition-all">
+            <form onSubmit={handleGenerateItinerary} className="space-y-6">
+              
+              {/* Row 1: Destination & Dates */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                
+                {/* Destination Input */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <MapPin className="w-3.5 h-3.5 text-indigo-600" /> Destination
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Ex: Kyoto, Italie, Islande..."
+                      value={destination}
+                      onChange={(e) => setDestination(e.target.value)}
+                      required
+                      className="w-full pl-3.5 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-lg sm:text-xl font-bold text-stone-900">
-                    Générateur d'Itinéraire IA
-                  </h2>
-                  <p className="text-xs text-stone-500">
-                    Personnalisez vos envies pour un programme clé en main
-                  </p>
+
+                {/* Date Départ */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Date Départ
+                  </label>
+                  <input
+                    type="date"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium"
+                  />
+                </div>
+
+                {/* Date Retour */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Date Retour
+                  </label>
+                  <input
+                    type="date"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    required
+                    className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium"
+                  />
+                </div>
+
+              </div>
+
+              {/* Row 2: Budget, Style & Voyageurs */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+                
+                {/* Budget selector */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <DollarSign className="w-3.5 h-3.5 text-indigo-600" /> Budget estimé
+                  </label>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-100 p-1 rounded-xl">
+                    {[
+                      { id: 'eco', label: 'Éco' },
+                      { id: 'moyen', label: 'Modéré' },
+                      { id: 'luxe', label: 'Luxe' },
+                    ].map((b) => (
+                      <button
+                        key={b.id}
+                        type="button"
+                        onClick={() => setBudget(b.id)}
+                        className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                          budget === b.id
+                            ? 'bg-white text-indigo-600 shadow-sm'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {b.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Type de Voyage */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Compass className="w-3.5 h-3.5 text-indigo-600" /> Ambiance / Style
+                  </label>
+                  <select
+                    value={tripType}
+                    onChange={(e) => setTripType(e.target.value)}
+                    className="w-full px-3.5 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 transition-all font-medium"
+                  >
+                    <option value="Aventure">Aventure & Nature</option>
+                    <option value="Relaxation">Relaxation & Détente</option>
+                    <option value="Culture">Culture & Histoire</option>
+                    <option value="Gastronomie">Gastronomie & Vins</option>
+                    <option value="Famille">Famille & Découverte</option>
+                  </select>
+                </div>
+
+                {/* Nombre de Voyageurs */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-indigo-600" /> Voyageurs
+                  </label>
+                  <div className="flex items-center bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setTravelers(Math.max(1, travelers - 1))}
+                      className="w-8 h-8 rounded-lg bg-white shadow-sm border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center transition-all"
+                    >
+                      -
+                    </button>
+                    <span className="text-sm font-bold text-slate-800">{travelers} {travelers > 1 ? 'Personnes' : 'Personne'}</span>
+                    <button
+                      type="button"
+                      onClick={() => setTravelers(travelers + 1)}
+                      className="w-8 h-8 rounded-lg bg-white shadow-sm border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 flex items-center justify-center transition-all"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Submit AI Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  disabled={isGenerating}
+                  className="w-full py-4 bg-gradient-to-r from-indigo-600 via-violet-600 to-pink-600 hover:opacity-95 text-white font-bold rounded-2xl shadow-xl shadow-indigo-200 hover:shadow-indigo-300 transition-all flex items-center justify-center gap-3 text-base group disabled:opacity-75 cursor-pointer"
+                >
+                  {isGenerating ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Analyse IA des acteurs locaux en cours...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                      <span>Générer mon itinéraire IA sur-mesure</span>
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+
+            {/* AI Generated Result Modal/Card */}
+            {generatedItinerary && (
+              <div className="mt-8 p-6 bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl animate-fade-in shadow-2xl relative overflow-hidden border border-indigo-500/30">
+                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                  <Sparkles className="w-48 h-48 text-white" />
+                </div>
+                
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <span className="inline-block px-3 py-1 bg-indigo-500/30 text-indigo-200 border border-indigo-400/30 text-xs font-bold rounded-full mb-2">
+                      Itinéraire Généré par l'IA
+                    </span>
+                    <h3 className="text-2xl font-bold">{generatedItinerary.title}</h3>
+                    <p className="text-slate-300 text-sm mt-1">
+                      {generatedItinerary.duration} • Budget: {generatedItinerary.budgetEstimated} • {generatedItinerary.type}
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setGeneratedItinerary(null)}
+                    className="text-slate-400 hover:text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-3 my-6">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-300">Points forts du séjour :</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {generatedItinerary.highlights.map((h: string, idx: number) => (
+                      <div key={idx} className="flex items-center gap-2 text-xs sm:text-sm text-slate-200">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                        <span>{h}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-slate-700/60">
+                  <button className="flex-1 py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-xl transition-all flex items-center justify-center gap-2">
+                    <span>Réserver les prestations suggérées</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                  <button className="py-3 px-4 bg-white/10 hover:bg-white/20 text-white text-sm font-semibold rounded-xl transition-all">
+                    Ajuster les critères
+                  </button>
                 </div>
               </div>
+            )}
+
+          </div>
+
+        </div>
+      </section>
+
+      {}
+      <section id="marketplace" className="py-20 bg-white border-y border-slate-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-4">
+            <div>
+              <div className="flex items-center gap-2 text-indigo-600 text-sm font-bold uppercase tracking-wider mb-2">
+                <Award className="w-4 h-4" /> Marketplace Directe
+              </div>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+                Services & Prestations Locales
+              </h2>
+              <p className="text-slate-600 mt-2 max-w-2xl text-sm sm:text-base">
+                Réservez en direct auprès d'acteurs locaux vérifiés. 0 intermédiaire abusif, impact économique 100% positif pour les communautés.
+              </p>
             </div>
 
-            {/* Destination Input */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700">
-                Destination de rêve
-              </label>
-              <div className="relative">
-                <MapPin className="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
-                <input
-                  type="text"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  placeholder="Ex: Kyoto, Rome, Marrakech, Bali, Lisbonne..."
-                  required
-                  className="w-full pl-11 pr-4 py-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-900 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600 focus:bg-white transition-all"
-                />
+            <button className="hidden sm:inline-flex items-center gap-2 text-sm font-bold text-indigo-600 hover:text-indigo-700 group">
+              <span>Voir tout le catalogue (2,400+)</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </button>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 no-scrollbar scroll-smooth">
+            {CATEGORIES.map((cat) => {
+              const Icon = cat.icon;
+              const isActive = selectedCategory === cat.id;
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-all shrink-0 ${
+                    isActive
+                      ? 'bg-slate-900 text-white shadow-md shadow-slate-200'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-400' : 'text-slate-500'}`} />
+                  <span>{cat.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Services Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {filteredServices.map((service) => (
+              <div
+                key={service.id}
+                className="group bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm hover:shadow-xl hover:border-slate-300 transition-all duration-300 flex flex-col"
+              >
+                {/* Image Container */}
+                <div className="relative h-52 overflow-hidden bg-slate-100">
+                  <img
+                    src={service.image}
+                    alt={service.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-md px-3 py-1 rounded-full flex items-center gap-1.5 text-xs font-bold text-indigo-700 shadow-sm">
+                    <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>{service.badge}</span>
+                  </div>
+                  <button className="absolute top-3 right-3 w-9 h-9 bg-white/80 hover:bg-white backdrop-blur-md rounded-full flex items-center justify-center text-slate-600 hover:text-rose-500 transition-all shadow-sm">
+                    <Heart className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Card Content */}
+                <div className="p-5 flex-1 flex flex-col justify-between">
+                  <div>
+                    {/* Location & Rating */}
+                    <div className="flex items-center justify-between text-xs text-slate-500 mb-2">
+                      <span className="flex items-center gap-1 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        {service.location}
+                      </span>
+                      <span className="flex items-center gap-1 font-bold text-slate-800">
+                        <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                        {service.rating} <span className="text-slate-400 font-normal">({service.reviewsCount})</span>
+                      </span>
+                    </div>
+
+                    {/* Title */}
+                    <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition-colors line-clamp-1">
+                      {service.title}
+                    </h3>
+
+                    {/* Provider */}
+                    <p className="text-xs text-slate-500 font-medium mt-1">
+                      Proposé par <span className="text-slate-800 font-semibold">{service.provider}</span>
+                    </p>
+
+                    {/* Description */}
+                    <p className="text-xs text-slate-600 mt-2.5 line-clamp-2 leading-relaxed">
+                      {service.description}
+                    </p>
+                  </div>
+
+                  {/* Price & CTA Footer */}
+                  <div className="pt-4 mt-4 border-t border-slate-100 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs text-slate-400 block font-medium">À partir de</span>
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-lg font-black text-slate-900">{service.price}€</span>
+                        <span className="text-xs text-slate-500">/ {service.unit}</span>
+                      </div>
+                    </div>
+
+                    <button className="px-4 py-2 bg-slate-900 group-hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm">
+                      Réserver
+                    </button>
+                  </div>
+
+                </div>
               </div>
-              <div className="flex flex-wrap gap-1.5 pt-1 text-xs">
-                <span className="text-stone-400">Suggestions :</span>
-                {["Kyoto", "Rome", "Marrakech", "Bali", "Lisbonne"].map((city) => (
-                  <button
-                    key={city}
-                    type="button"
-                    onClick={() => setDestination(city)}
-                    className="px-2 py-0.5 rounded bg-stone-100 hover:bg-stone-200 text-stone-700 cursor-pointer"
-                  >
-                    {city}
+            ))}
+          </div>
+
+        </div>
+      </section>
+
+      {}
+      <section id="itineraries" className="py-20 bg-slate-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <span className="text-xs font-bold text-indigo-600 uppercase tracking-widest">Inspirations Recommandées</span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mt-1">
+              Itinéraires IA Prêts à Partir
+            </h2>
+            <p className="text-slate-600 text-sm sm:text-base mt-2">
+              Explorez les itinéraires les mieux notés générés par notre communauté et optimisés avec les acteurs locaux.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {POPULAR_ITINERARIES.map((item) => {
+              const isExpanded = expandedItinerary === item.id;
+              return (
+                <div
+                  key={item.id}
+                  className={`bg-white rounded-3xl border transition-all overflow-hidden flex flex-col ${
+                    isExpanded ? 'ring-2 ring-indigo-600 border-transparent shadow-xl' : 'border-slate-200 shadow-sm hover:shadow-md'
+                  }`}
+                >
+                  {/* Itinerary Header Banner */}
+                  <div className="relative h-48 overflow-hidden">
+                    <img src={item.image} alt={item.destination} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
+                    
+                    <div className="absolute top-3 right-3 bg-emerald-500/90 text-white text-xs font-black px-2.5 py-1 rounded-full backdrop-blur-md">
+                      {item.matchScore}% Match Local
+                    </div>
+
+                    <div className="absolute bottom-4 left-4 right-4 text-white">
+                      <span className="text-xs font-semibold text-indigo-200 uppercase tracking-wider">{item.country} • {item.duration}</span>
+                      <h3 className="text-xl font-bold">{item.destination}</h3>
+                    </div>
+                  </div>
+
+                  {/* Tags */}
+                  <div className="p-4 bg-slate-50/50 border-b border-slate-100 flex items-center gap-1.5 flex-wrap">
+                    {item.tags.map((tag, idx) => (
+                      <span key={idx} className="text-[11px] font-bold text-slate-600 bg-slate-200/60 px-2.5 py-0.5 rounded-md">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Day by Day Preview Accordion */}
+                  <div className="p-5 flex-1 flex flex-col justify-between">
+                    <div>
+                      <h4 className="text-xs font-bold uppercase text-slate-400 tracking-wider mb-3">
+                        Aperçu Jour par Jour :
+                      </h4>
+
+                      <div className="space-y-3">
+                        {item.days.map((day) => (
+                          <div key={day.day} className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                J{day.day}
+                              </span>
+                              <span className="text-xs font-bold text-slate-800">{day.title}</span>
+                            </div>
+                            <ul className="pl-7 text-[11px] text-slate-600 space-y-0.5 list-disc">
+                              {day.activities.map((act, i) => (
+                                <li key={i}>{act}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between">
+                      <button
+                        onClick={() => setExpandedItinerary(isExpanded ? null : item.id)}
+                        className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                      >
+                        <span>{isExpanded ? 'Masquer les détails' : 'Explorer le programme complet'}</span>
+                        <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      </button>
+
+                      <button className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors">
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+
+        </div>
+      </section>
+
+      {}
+      <section id="why-us" className="py-20 bg-slate-900 text-white relative overflow-hidden">
+        
+        {/* Glow Effects */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl -z-0" />
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl -z-0" />
+
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Impact Social & Éthique</span>
+            <h2 className="text-3xl sm:text-4xl font-extrabold mt-1">
+              Pourquoi passer directement par nos acteurs locaux ?
+            </h2>
+            <p className="text-slate-400 mt-3 text-sm sm:text-base">
+              L'industrie du tourisme traditionnel capture jusqu'à 70% de la valeur. Notre algorithme IA privilégie le circuit court pour un voyage plus juste et authentique.
+            </p>
+          </div>
+
+          {/* Grid Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
+            
+            <div className="bg-slate-800/60 backdrop-blur-md p-8 rounded-3xl border border-slate-700/60 hover:border-indigo-500/50 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-6">
+                <UserCheck className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">100% Vérifiés & Indépendants</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Chaque guide, hébergement et artisan est rencontré et certifié par nos équipes locales sur le terrain.
+              </p>
+            </div>
+
+            <div className="bg-slate-800/60 backdrop-blur-md p-8 rounded-3xl border border-slate-700/60 hover:border-indigo-500/50 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 mb-6">
+                <Zap className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">Revenu Équitable Direct</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                85% du prix de chaque réservation va directement dans la poche de l'hôte local, sans intermédiaires cachés.
+              </p>
+            </div>
+
+            <div className="bg-slate-800/60 backdrop-blur-md p-8 rounded-3xl border border-slate-700/60 hover:border-indigo-500/50 transition-all">
+              <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 mb-6">
+                <Sparkles className="w-6 h-6" />
+              </div>
+              <h3 className="text-xl font-bold mb-2">IA Anti-Surtourisme</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Notre algorithme équilibre les flux touristiques en vous suggérant des pépites méconnues et préservées.
+              </p>
+            </div>
+
+          </div>
+
+          {/* Impact Stats Banner */}
+          <div className="bg-indigo-600 rounded-3xl p-8 sm:p-12 grid grid-cols-2 lg:grid-cols-4 gap-8 text-center">
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-white">2,400+</div>
+              <div className="text-xs sm:text-sm font-medium text-indigo-100 mt-1">Acteurs Locaux Vérifiés</div>
+            </div>
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-white">98.4%</div>
+              <div className="text-xs sm:text-sm font-medium text-indigo-100 mt-1">Satisfaction Voyageurs</div>
+            </div>
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-white">€1.2M+</div>
+              <div className="text-xs sm:text-sm font-medium text-indigo-100 mt-1">Reversés aux Communautés</div>
+            </div>
+            <div>
+              <div className="text-3xl sm:text-4xl font-black text-white">45+</div>
+              <div className="text-xs sm:text-sm font-medium text-indigo-100 mt-1">Pays Équitablement Couverts</div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {}
+      <footer className="bg-slate-950 text-slate-400 pt-16 pb-12 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-slate-800">
+            
+            {/* Col 1 & 2: Brand info */}
+            <div className="lg:col-span-2 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+                  <Compass className="w-5 h-5" />
+                </div>
+                <span className="text-lg font-extrabold text-white">AuraTravel.ai</span>
+              </div>
+              <p className="text-xs sm:text-sm text-slate-400 max-w-sm leading-relaxed">
+                La première plateforme de voyage alimentée par l'IA qui remet l'humain et les acteurs locaux au cœur de chaque destination.
+              </p>
+              <div className="flex items-center gap-3 pt-2">
+                {['Twitter', 'Instagram', 'LinkedIn', 'YouTube'].map((social) => (
+                  <button key={social} className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-xs text-white flex items-center justify-center transition-colors">
+                    {social[0]}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Duration, Date & Travelers */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-stone-700 uppercase">
-                  Date de départ
-                </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs sm:text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs font-bold text-stone-700 uppercase">
-                  <span>Durée ({durationDays} jours)</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="7"
-                  value={durationDays}
-                  onChange={(e) => setDurationDays(Number(e.target.value))}
-                  className="w-full h-2 bg-stone-200 rounded-lg appearance-none cursor-pointer accent-emerald-700 mt-3"
-                />
-                <div className="flex justify-between text-[10px] text-stone-400">
-                  <span>1 jour</span>
-                  <span>4 jours</span>
-                  <span>7 jours</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-stone-700 uppercase">
-                  Voyageurs
-                </label>
-                <div className="relative">
-                  <Users className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                  <select
-                    value={travelersCount}
-                    onChange={(e) => setTravelersCount(Number(e.target.value))}
-                    className="w-full pl-9 pr-3 py-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs sm:text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-600"
-                  >
-                    <option value={1}>1 voyageur (Solo)</option>
-                    <option value={2}>2 personnes (Couple / Amis)</option>
-                    <option value={3}>3 personnes (Famille)</option>
-                    <option value={4}>4 personnes</option>
-                    <option value={5}>5+ personnes (Groupe)</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Travel Style Selector */}
-            <div className="space-y-2">
-              <label className="block text-xs font-bold uppercase tracking-wider text-stone-700">
-                Ambiance &amp; Style de voyage
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-                {[
-                  { id: "culture", label: "Culture & Histoire", icon: <Landmark className="w-4 h-4" /> },
-                  { id: "gastronomie", label: "Gastronomie", icon: <Utensils className="w-4 h-4" /> },
-                  { id: "nature", label: "Nature & Randos", icon: <Trees className="w-4 h-4" /> },
-                  { id: "detente", label: "Détente & Spa", icon: <Heart className="w-4 h-4" /> },
-                  { id: "aventure", label: "Aventure", icon: <Compass className="w-4 h-4" /> },
-                  { id: "famille", label: "Famille", icon: <Users className="w-4 h-4" /> },
-                ].map((s) => {
-                  const active = travelStyle === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setTravelStyle(s.id as TravelStyle)}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                        active
-                          ? "border-emerald-700 bg-emerald-50 text-emerald-950 font-bold"
-                          : "border-stone-200 bg-stone-50 text-stone-700 hover:bg-stone-100"
-                      }`}
-                    >
-                      <div className="flex justify-between items-center mb-1">
-                        <span className={active ? "text-emerald-700" : "text-stone-500"}>
-                          {s.icon}
-                        </span>
-                        {active && <Check className="w-3.5 h-3.5 text-emerald-700" />}
-                      </div>
-                      <span className="text-xs">{s.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Budget & Interests */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-stone-700 uppercase">
-                  Niveau de budget
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(["eco", "confort", "luxe"] as BudgetLevel[]).map((b) => (
-                    <button
-                      key={b}
-                      type="button"
-                      onClick={() => setBudgetLevel(b)}
-                      className={`py-2 px-3 text-xs rounded-xl border font-semibold capitalize cursor-pointer transition-all ${
-                        budgetLevel === b
-                          ? "bg-emerald-700 text-white border-emerald-700"
-                          : "bg-stone-50 text-stone-700 border-stone-200 hover:bg-stone-100"
-                      }`}
-                    >
-                      {b}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-stone-700 uppercase">
-                  Envies spécifiques
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { id: "artisanat", label: "Artisanat d'art" },
-                    { id: "gastronomie", label: "Saveurs locales" },
-                    { id: "photo", label: "Points de vue" },
-                    { id: "nature", label: "Plein air" },
-                  ].map((t) => {
-                    const active = selectedInterests.includes(t.id);
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => toggleInterest(t.id)}
-                        className={`px-2.5 py-1 text-xs rounded-lg border transition-colors cursor-pointer ${
-                          active
-                            ? "bg-stone-800 text-white border-stone-800"
-                            : "bg-stone-50 text-stone-600 border-stone-200 hover:bg-stone-100"
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-3.5 px-6 rounded-xl font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-700 hover:from-emerald-700 hover:to-teal-800 shadow-md shadow-emerald-700/20 flex items-center justify-center gap-2 text-sm transition-all cursor-pointer disabled:opacity-60"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Génération par l'IA en cours...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  <span>Générer mon itinéraire ({durationDays} jours à {destination})</span>
-                </>
-              )}
-            </button>
-          </form>
-        </section>
-
-        {/* 3. SECTION ITINÉRAIRE AFFICHÉ */}
-        <section id="itinerary-section" className="space-y-6">
-          {/* Header Banner */}
-          <div className="bg-gradient-to-r from-stone-900 to-stone-800 text-white rounded-2xl p-6 sm:p-8 shadow-sm">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                    Itinéraire IA vérifié
-                  </span>
-                  <span className="text-xs text-stone-400">Pour {itinerary.travelersCount} personne(s)</span>
-                </div>
-                <h3 className="text-2xl sm:text-3xl font-bold">{itinerary.title}</h3>
-                <p className="text-xs sm:text-sm text-stone-300 max-w-2xl leading-relaxed">
-                  {itinerary.overview}
-                </p>
-              </div>
-
-              <div className="bg-white/10 backdrop-blur-xs p-4 rounded-xl border border-white/10 text-right shrink-0">
-                <span className="text-xs text-stone-300 block">Budget global estimé</span>
-                <span className="text-2xl font-black text-emerald-400">
-                  {itinerary.estimatedTotalBudget}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-white/10 flex flex-wrap items-center justify-between text-xs text-stone-400 gap-2">
-              <div className="flex items-center gap-1.5">
-                <Compass className="w-3.5 h-3.5 text-emerald-400" />
-                <span>{itinerary.bestTransportTip}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => alert("Lien de l'itinéraire copié dans le presse-papier !")}
-                  className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <Share2 className="w-3 h-3" />
-                  <span>Partager</span>
-                </button>
-                <button
-                  onClick={() => window.print()}
-                  className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer flex items-center gap-1"
-                >
-                  <Printer className="w-3 h-3" />
-                  <span>Imprimer</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Days Tabs */}
-          <div className="flex gap-2 overflow-x-auto pb-2">
-            {itinerary.days.map((day, idx) => (
-              <button
-                key={day.dayNumber}
-                onClick={() => setSelectedDayIndex(idx)}
-                className={`px-4 py-2.5 rounded-xl font-medium text-xs sm:text-sm whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer ${
-                  selectedDayIndex === idx
-                    ? "bg-emerald-700 text-white shadow-sm"
-                    : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
-                }`}
-              >
-                <Calendar className="w-3.5 h-3.5" />
-                <span>Jour {day.dayNumber}</span>
-                <span className="text-[11px] opacity-80">({day.dailyEstimatedCost})</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Current Day Details Card */}
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 sm:p-8 space-y-6 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-stone-100 gap-2">
-              <div>
-                <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-800">
-                  Jour {currentDay.dayNumber} : {currentDay.theme}
-                </span>
-                <h4 className="text-lg sm:text-xl font-bold text-stone-900 mt-1">
-                  {currentDay.title}
-                </h4>
-              </div>
-              <a
-                href="#marketplace-section"
-                className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1 self-start sm:self-auto"
-              >
-                <span>Trouver un guide local pour ce jour</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </a>
-            </div>
-
-            {/* 4 Steps Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { label: "Matinée", time: currentDay.morning.time, data: currentDay.morning, icon: <Clock className="w-3.5 h-3.5 text-emerald-700" /> },
-                { label: "Halte Gourmande", time: currentDay.lunch.time, data: currentDay.lunch, icon: <Utensils className="w-3.5 h-3.5 text-amber-700" /> },
-                { label: "Après-midi Découverte", time: currentDay.afternoon.time, data: currentDay.afternoon, icon: <Landmark className="w-3.5 h-3.5 text-teal-700" /> },
-                { label: "Soirée & Ambiance", time: currentDay.evening.time, data: currentDay.evening, icon: <Sparkles className="w-3.5 h-3.5 text-indigo-700" /> },
-              ].map((step, idx) => (
-                <div key={idx} className="p-4 rounded-xl bg-stone-50 border border-stone-200 space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold flex items-center gap-1.5 text-stone-700">
-                      {step.icon}
-                      {step.label} ({step.time})
-                    </span>
-                    <span className="font-semibold text-stone-500 bg-stone-200/60 px-2 py-0.5 rounded">
-                      ~ {step.data.costEstimate}
-                    </span>
-                  </div>
-                  <h5 className="font-bold text-sm text-stone-900">{step.data.title}</h5>
-                  <p className="text-xs text-stone-600 leading-relaxed">{step.data.description}</p>
-                  <div className="text-[11px] text-stone-400 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />
-                    <span>{step.data.location}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Local Insider Tip */}
-            <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-3">
-              <Lightbulb className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
-                  Conseil d'initié de l'IA locale
-                </span>
-                <p className="text-xs text-amber-800 mt-0.5">{currentDay.localTip}</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* 4. SECTION SERVICES TOURISTIQUES LOCAUX (MARKETPLACE) */}
-        <section id="marketplace-section" className="space-y-6 pt-4">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-4 border-b border-stone-200">
+            {/* Col 3: Navigation */}
             <div>
-              <div className="flex items-center gap-2">
-                <div className="p-2 rounded-lg bg-emerald-100 text-emerald-800">
-                  <Store className="w-5 h-5 text-emerald-700" />
-                </div>
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-900">
-                  Marketplace des Services Touristiques Locaux
-                </h2>
-              </div>
-              <p className="text-xs sm:text-sm text-stone-600 mt-1">
-                Guides francophones certifiés, ateliers d'artisans, chauffeurs privés et éco-hébergements vérifiés.
-              </p>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-4">Plateforme</h4>
+              <ul className="space-y-2.5 text-xs sm:text-sm">
+                <li><a href="#ia-planner" className="hover:text-white transition-colors">Planificateur IA</a></li>
+                <li><a href="#marketplace" className="hover:text-white transition-colors">Marketplace Locale</a></li>
+                <li><a href="#itineraries" className="hover:text-white transition-colors">Itinéraires Suivis</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Offres Partenaires</a></li>
+              </ul>
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-stone-600">
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-stone-200/70">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
-                100% Prestataires Vérifiés
-              </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-stone-200/70">
-                <Zap className="w-3.5 h-3.5 text-amber-600" />
-                Réservation Directe
-              </span>
+            {/* Col 4: Prestations */}
+            <div>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-4">Prestataires</h4>
+              <ul className="space-y-2.5 text-xs sm:text-sm">
+                <li><a href="#" className="hover:text-white transition-colors">Devenir Guide Local</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Proposer un Hébergement</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Charte Éthique & Qualité</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Espace Hôtes</a></li>
+              </ul>
+            </div>
+
+            {/* Col 5: Support */}
+            <div>
+              <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-4">Support</h4>
+              <ul className="space-y-2.5 text-xs sm:text-sm">
+                <li><a href="#" className="hover:text-white transition-colors">Centre d'aide</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Garantie Annulation</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Politique de Confidentialité</a></li>
+                <li><a href="#" className="hover:text-white transition-colors">Contactez-nous</a></li>
+              </ul>
+            </div>
+
+          </div>
+
+          {/* Bottom Copyright */}
+          <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
+            <p>© {new Date().getFullYear()} AuraTravel.ai, Inc. Tous droits réservés.</p>
+            <div className="flex gap-6">
+              <a href="#" className="hover:underline">Conditions d'utilisation</a>
+              <a href="#" className="hover:underline">Cookies</a>
+              <a href="#" className="hover:underline">Mentions Légales</a>
             </div>
           </div>
 
-          {/* Categories Filter Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
-            {[
-              { id: "all", label: "Tous les services" },
-              { id: "guides", label: "Guides Certifiés" },
-              { id: "experiences", label: "Expériences & Ateliers" },
-              { id: "transports", label: "Transports & Chauffeurs" },
-              { id: "workshops", label: "Artisanat" },
-              { id: "lodging", label: "Éco-Hébergements" },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => setCategoryFilter(cat.id as ServiceCategory)}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold whitespace-nowrap cursor-pointer transition-all ${
-                  categoryFilter === cat.id
-                    ? "bg-stone-900 text-white"
-                    : "bg-white text-stone-700 border border-stone-200 hover:bg-stone-50"
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Search Bar inside Marketplace */}
-          <div className="relative max-w-md">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input
-              type="text"
-              value={searchFilter}
-              onChange={(e) => setSearchFilter(e.target.value)}
-              placeholder="Filtrer par titre, artisan, ville..."
-              className="w-full pl-9 pr-4 py-2 bg-white border border-stone-200 rounded-xl text-xs sm:text-sm text-stone-900 focus:outline-none focus:ring-1 focus:ring-emerald-700"
-            />
-          </div>
-
-          {/* Grid of Marketplace Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredServices.map((item) => {
-              const isFav = favorites.includes(item.id);
-              return (
-                <div
-                  key={item.id}
-                  className="group bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
-                >
-                  {/* Image */}
-                  <div className="relative aspect-[16/10] overflow-hidden bg-stone-100">
-                    <img
-                      src={item.image}
-                      alt={item.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                    <div className="absolute top-3 left-3 flex gap-1">
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white/95 text-stone-900 shadow-xs">
-                        {item.categoryLabel}
-                      </span>
-                      {item.badges[0] && (
-                        <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-700 text-white shadow-xs">
-                          {item.badges[0]}
-                        </span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => toggleFavorite(item.id)}
-                      className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/90 flex items-center justify-center text-stone-600 hover:text-red-500 shadow-xs transition-colors cursor-pointer"
-                    >
-                      <Heart className={`w-4 h-4 ${isFav ? "fill-red-500 text-red-500" : ""}`} />
-                    </button>
-                  </div>
-
-                  {/* Body Info */}
-                  <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs text-stone-500">
-                        <span className="flex items-center gap-1 line-clamp-1">
-                          <MapPin className="w-3.5 h-3.5 text-stone-400" />
-                          {item.location}
-                        </span>
-                        <span className="flex items-center gap-1 font-medium text-stone-600">
-                          <Clock className="w-3 h-3 text-stone-400" />
-                          {item.duration}
-                        </span>
-                      </div>
-
-                      <h4 className="font-bold text-base text-stone-900 group-hover:text-emerald-800 transition-colors line-clamp-2">
-                        {item.title}
-                      </h4>
-
-                      <p className="text-xs text-stone-600 line-clamp-2 leading-relaxed">
-                        {item.shortDescription}
-                      </p>
-                    </div>
-
-                    {/* Provider Info */}
-                    <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <img
-                          src={item.provider.avatar}
-                          alt={item.provider.name}
-                          className="w-8 h-8 rounded-full object-cover border border-stone-200"
-                        />
-                        <div>
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs font-semibold text-stone-900 leading-tight">
-                              {item.provider.name}
-                            </span>
-                            {item.provider.verified && (
-                              <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                            )}
-                          </div>
-                          <span className="text-[10px] text-stone-500 block leading-tight">
-                            {item.provider.role}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1 text-xs font-bold text-stone-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-200/50">
-                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                        <span>{item.rating}</span>
-                        <span className="text-[10px] text-stone-400">({item.reviewsCount})</span>
-                      </div>
-                    </div>
-
-                    {/* Price & Action */}
-                    <div className="pt-3 border-t border-stone-100 flex items-center justify-between">
-                      <div>
-                        <span className="text-[10px] text-stone-500 block">Tarif</span>
-                        <span className="text-lg font-black text-stone-900">
-                          {item.price} {item.currency}{" "}
-                          <span className="text-[11px] font-normal text-stone-500">
-                            / {item.priceUnit}
-                          </span>
-                        </span>
-                      </div>
-
-                      <button
-                        onClick={() => {
-                          setSelectedService(item);
-                          setBookingConfirmed(false);
-                        }}
-                        className="px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 text-white transition-colors cursor-pointer"
-                      >
-                        Détails &amp; Réserver
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      </main>
-
-      {/* 5. MODAL DE RÉSERVATION / DÉTAILS SERVICE */}
-      {selectedService && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-stone-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="relative w-full max-w-xl bg-white rounded-2xl shadow-2xl border border-stone-200 overflow-hidden my-6">
-            <div className="flex items-center justify-between p-4 border-b border-stone-200 bg-stone-50">
-              <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded">
-                {selectedService.categoryLabel}
-              </span>
-              <button
-                onClick={() => setSelectedService(null)}
-                className="w-7 h-7 rounded-full bg-stone-200 hover:bg-stone-300 flex items-center justify-center text-stone-600 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-              {bookingConfirmed ? (
-                <div className="text-center py-6 space-y-3">
-                  <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 mx-auto flex items-center justify-center">
-                    <Check className="w-6 h-6" />
-                  </div>
-                  <h4 className="text-xl font-bold text-stone-900">Réservation Enregistrée !</h4>
-                  <p className="text-xs text-stone-600 max-w-sm mx-auto">
-                    Votre demande pour <strong>{selectedService.title}</strong> auprès de{" "}
-                    <strong>{selectedService.provider.name}</strong> a bien été transmise.
-                  </p>
-                  <button
-                    onClick={() => setSelectedService(null)}
-                    className="mt-2 px-5 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer hover:bg-emerald-800"
-                  >
-                    Revenir à l'itinéraire
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="aspect-[16/9] rounded-xl overflow-hidden bg-stone-100">
-                    <img
-                      src={selectedService.image}
-                      alt={selectedService.title}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <h3 className="text-lg font-bold text-stone-900">{selectedService.title}</h3>
-                  <p className="text-xs text-stone-600 leading-relaxed">
-                    {selectedService.fullDescription}
-                  </p>
-
-                  <div className="p-3 bg-stone-50 rounded-xl border border-stone-200 text-xs space-y-1">
-                    <span className="font-bold text-stone-800 block">Ce qui est inclus :</span>
-                    <ul className="list-disc pl-4 space-y-0.5 text-stone-600">
-                      {selectedService.included.map((inc, i) => (
-                        <li key={i}>{inc}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="pt-3 border-t border-stone-200 flex items-center justify-between">
-                    <div>
-                      <span className="text-xs text-stone-500 block">Total indicatif :</span>
-                      <span className="text-xl font-black text-stone-900">
-                        {selectedService.price} {selectedService.currency}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setBookingConfirmed(true)}
-                      className="px-5 py-2.5 rounded-xl bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 hover:bg-emerald-800 cursor-pointer"
-                    >
-                      <CreditCard className="w-4 h-4" />
-                      <span>Confirmer la réservation</span>
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
         </div>
-      )}
-
-      {/* 6. FOOTER */}
-      <footer className="w-full border-t border-stone-200 bg-white py-8 text-center text-xs text-stone-500 space-y-2">
-        <p className="font-medium text-stone-700">
-          TerraLocals • Itinéraire de Voyage IA &amp; Marketplace Locale
-        </p>
-        <p>
-          Développé pour Next.js 14 (App Router) avec Tailwind CSS et Lucide Icons.
-        </p>
       </footer>
+
     </div>
   );
 }
