@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// 1. Initialisation du client Supabase
+// 1. Initialisation sécurisée du client Supabase
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseServiceKey =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  '';
+
+if (!supabaseUrl || !supabaseServiceKey) {
+  console.warn('Supabase URL ou Key non configurée dans les variables d\'environnement.');
+}
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
@@ -13,7 +20,7 @@ interface BookingPayload {
   userId: string;
   startDate: string;
   endDate?: string;
-  amount: number; // Montant total brut (ex: 100000 Ar / EUR)
+  amount: number; // Montant total brut (ex: Ar / EUR)
   currency?: string;
   customerName: string;
   customerEmail: string;
@@ -38,7 +45,10 @@ export async function POST(request: NextRequest) {
     // 2. Validation des champs requis
     if (!serviceId || !userId || !amount || amount <= 0 || !customerEmail) {
       return NextResponse.json(
-        { error: 'Champs obligatoires manquants ou invalides (serviceId, userId, amount, customerEmail).' },
+        {
+          error:
+            'Champs obligatoires manquants ou invalides (serviceId, userId, amount, customerEmail).',
+        },
         { status: 400 }
       );
     }
@@ -75,28 +85,36 @@ export async function POST(request: NextRequest) {
     if (dbError || !booking) {
       console.error('Erreur Supabase lors de la réservation:', dbError);
       return NextResponse.json(
-        { error: 'Échec de la création de la réservation dans la base de données.', details: dbError?.message },
+        {
+          error: 'Échec de la création de la réservation dans la base de données.',
+          details: dbError?.message,
+        },
         { status: 500 }
       );
     }
 
-    // 5. Interaction avec VanillaPay
+    // 5. Configuration de VanillaPay
     const vpClientId = process.env.VANILLAPAY_CLIENT_ID;
     const vpClientSecret = process.env.VANILLAPAY_CLIENT_SECRET;
-    const vpApiUrl = process.env.VANILLAPAY_API_URL || 'https://pro.ariarynet.com';
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const vpApiUrl = (process.env.VANILLAPAY_API_URL || 'https://pro.ariarynet.com').replace(/\/$/, '');
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000').replace(/\/$/, '');
 
+    // Mode simulation si les identifiants VanillaPay sont absents
     if (!vpClientId || !vpClientSecret) {
-      // Mode secours / Test sans clé VanillaPay paramétrée
       return NextResponse.json({
         success: true,
         message: 'Réservation créée avec succès (Mode simulation VanillaPay).',
-        booking: booking,
+        booking: {
+          id: booking.id,
+          totalAmount: booking.total_amount,
+          commission: booking.platform_commission,
+          status: booking.status,
+        },
         paymentUrl: `${baseUrl}/checkout/mock-payment?bookingId=${booking.id}`,
       });
     }
 
-    // Step A: Obtention du Token OAuth VanillaPay
+    // Étape A: Obtention du Token OAuth VanillaPay
     const tokenParams = new URLSearchParams({
       client_id: vpClientId,
       client_secret: vpClientSecret,
@@ -106,6 +124,7 @@ export async function POST(request: NextRequest) {
     const tokenResponse = await fetch(`${vpApiUrl}/oauth/v2/token?${tokenParams.toString()}`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
     });
 
     const tokenData = await tokenResponse.json();
@@ -113,30 +132,34 @@ export async function POST(request: NextRequest) {
     if (!tokenResponse.ok || (!tokenData.access_token && !tokenData.Data?.Token)) {
       console.error('Erreur Token VanillaPay:', tokenData);
       return NextResponse.json(
-        { error: 'Échec de la génération du jeton de paiement VanillaPay.' },
+        { error: 'Échec de la génération du jeton d\'accès VanillaPay.' },
         { status: 500 }
       );
     }
 
     const token = tokenData.access_token || tokenData.Data?.Token;
 
-    // Step B: Initialisation du Paiement VanillaPay
+    // Étape B: Initialisation du Paiement VanillaPay
     const initPaymentPayload = {
       montant: amount,
       devise: currency,
-      reference: booking.id, // ID de la réservation Supabase comme référence
-      panier: `Réservation - ${booking.id}`,
+      reference: booking.id,
+      panier: `Réservation TRAVELIN AI - ${booking.id}`,
       notifUrl: `${baseUrl}/api/webhooks/vanillapay`,
       redirectUrl: `${baseUrl}/bookings/confirmation?bookingId=${booking.id}`,
+      nom: customerName,
+      email: customerEmail,
+      telephone: customerPhone || '',
     };
 
     const initPaymentResponse = await fetch(`${vpApiUrl}/api/paiements`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(initPaymentPayload),
+      cache: 'no-store',
     });
 
     const paymentData = await initPaymentResponse.json();
@@ -144,26 +167,31 @@ export async function POST(request: NextRequest) {
     if (!initPaymentResponse.ok) {
       console.error('Erreur Init Payment VanillaPay:', paymentData);
       return NextResponse.json(
-        { error: "Échec de l'initialisation du lien de paiement VanillaPay." },
+        { error: 'Échec de l\'initialisation du lien de paiement VanillaPay.' },
         { status: 500 }
       );
     }
 
-    // Extraction de l'URL ou ID de paiement retourné par VanillaPay
+    // Extraction de l'URL ou ID de paiement
     const paymentUrl =
+      paymentData.url ||
       paymentData.Data?.url ||
       `${vpApiUrl}/payer/${paymentData.id || paymentData.Data?.id}`;
 
-    // Update optionnel: Sauvegarde du lien ou ID VanillaPay dans la réservation
-    await supabase
-      .from('bookings')
-      .update({ vanilla_pay_ref: paymentData.id || paymentData.Data?.reference })
-      .eq('id', booking.id);
+    const vanillaPayRef = paymentData.id || paymentData.Data?.id || paymentData.Data?.reference || null;
 
-    // 6. Réponse finale avec le lien de paiement VanillaPay
+    // Mise à jour de la référence VanillaPay dans Supabase
+    if (vanillaPayRef) {
+      await supabase
+        .from('bookings')
+        .update({ vanilla_pay_ref: vanillaPayRef })
+        .eq('id', booking.id);
+    }
+
+    // 6. Réponse finale avec le lien de paiement
     return NextResponse.json({
       success: true,
-      message: 'Réservation créée avec succès.',
+      message: 'Réservation et lien de paiement créés avec succès.',
       booking: {
         id: booking.id,
         totalAmount: booking.total_amount,
@@ -173,7 +201,7 @@ export async function POST(request: NextRequest) {
       paymentUrl: paymentUrl,
     });
   } catch (error: any) {
-    console.error('Erreur serveur lors de la création de réservation:', error);
+    console.error('Erreur serveur lors de la réservation:', error);
     return NextResponse.json(
       { error: 'Erreur serveur interne.', details: error.message },
       { status: 500 }
