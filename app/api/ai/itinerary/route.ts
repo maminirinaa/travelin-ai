@@ -1,14 +1,5 @@
-import { GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { NextRequest, NextResponse } from 'next/server';
-
-// Validation et initialisation du SDK Google Gen AI
-const apiKey = process.env.GEMINI_API_KEY;
-
-if (!apiKey) {
-  console.warn("ATTENTION: La variable d'environnement GEMINI_API_KEY n'est pas définie.");
-}
-
-const ai = new GoogleGenAI({ apiKey: apiKey || '' });
 
 // Interfaces TypeScript pour la validation du body de la requête
 interface ItineraryRequestBody {
@@ -20,8 +11,9 @@ interface ItineraryRequestBody {
 
 export async function POST(request: NextRequest) {
   try {
-    // 1. Validation de l'API Key
-    if (!process.env.GEMINI_API_KEY) {
+    // 1. Validation de la clé API
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
       return NextResponse.json(
         { error: 'Clé API Gemini non configurée sur le serveur.' },
         { status: 500 }
@@ -54,53 +46,54 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. Prompt système et utilisateur
+    // 4. Prompt utilisateur
     const prompt = `Crée un itinéraire de voyage sur mesure de ${days} jour(s) pour ${destination}. 
 Budget ciblé : ${budget}.
 ${preferences.length > 0 ? `Centres d'intérêt / Préférences : ${preferences.join(', ')}.` : ''}
 
 Donne des recommandations concrètes et adaptées au lieu et au budget.`;
 
-    // 5. Appel de l'API Gemini avec Structured Outputs via @google/genai SDK
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        systemInstruction:
-          'Tu es un expert en organisation de voyages sur-mesure. Tu réponds de manière structurée, précise et attrayante.',
+    // 5. Initialisation du SDK @google/generative-ai
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',
+      systemInstruction:
+        'Tu es un expert en organisation de voyages sur-mesure. Tu réponds de manière structurée, précise et attrayante.',
+      generationConfig: {
         temperature: 0.7,
         responseMimeType: 'application/json',
         responseSchema: {
-          type: Type.OBJECT,
+          type: SchemaType.OBJECT,
           properties: {
-            destination: { type: Type.STRING },
-            durationDays: { type: Type.INTEGER },
-            estimatedTotalBudget: { type: Type.STRING },
-            summary: { type: Type.STRING },
+            destination: { type: SchemaType.STRING },
+            durationDays: { type: SchemaType.INTEGER },
+            estimatedTotalBudget: { type: SchemaType.STRING },
+            summary: { type: SchemaType.STRING },
             highlights: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING },
             },
             dailyItinerary: {
-              type: Type.ARRAY,
+              type: SchemaType.ARRAY,
               items: {
-                type: Type.OBJECT,
+                type: SchemaType.OBJECT,
                 properties: {
-                  day: { type: Type.INTEGER },
-                  title: { type: Type.STRING },
+                  day: { type: SchemaType.INTEGER },
+                  title: { type: SchemaType.STRING },
                   activities: {
-                    type: Type.ARRAY,
+                    type: SchemaType.ARRAY,
                     items: {
-                      type: Type.OBJECT,
+                      type: SchemaType.OBJECT,
                       properties: {
                         timeSlot: {
-                          type: Type.STRING,
+                          type: SchemaType.STRING,
                           description: 'Ex: Matin, Après-midi, Soir',
                         },
-                        title: { type: Type.STRING },
-                        description: { type: Type.STRING },
-                        estimatedCost: { type: Type.STRING },
-                        location: { type: Type.STRING },
+                        title: { type: SchemaType.STRING },
+                        description: { type: SchemaType.STRING },
+                        estimatedCost: { type: SchemaType.STRING },
+                        location: { type: SchemaType.STRING },
                       },
                       required: ['timeSlot', 'title', 'description'],
                     },
@@ -110,8 +103,8 @@ Donne des recommandations concrètes et adaptées au lieu et au budget.`;
               },
             },
             practicalTips: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING },
+              type: SchemaType.ARRAY,
+              items: { type: SchemaType.STRING },
             },
           },
           required: [
@@ -127,17 +120,17 @@ Donne des recommandations concrètes et adaptées au lieu et au budget.`;
       },
     });
 
-    // 6. Extraction du texte généré (qui est du JSON garanti par le schema)
-    const jsonText = response.text;
+    // 6. Appel de l'API Gemini
+    const result = await model.generateContent(prompt);
+    const jsonText = result.response.text();
 
     if (!jsonText) {
       throw new Error("L'IA n'a pas retourné de réponse valide.");
     }
 
-    // Parsing du JSON pour s'assurer qu'il est valide
     const itineraryData = JSON.parse(jsonText);
 
-    // 7. Envoi de la réponse JSON au client Next.js
+    // 7. Envoi de la réponse JSON au client
     return NextResponse.json({
       success: true,
       data: itineraryData,
